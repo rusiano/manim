@@ -43,18 +43,29 @@ while True:
 print(SEQ)
 print(len(set(SEQ)))
 
-class RegularRandomGen:
+class RegularCoinSequenceTosser:
 
     def __init__(self, k) -> None:
         self.k = k
-        self._count = 0
+        self._mod = 2**k
+        self._index = 0
+        self._g_index = 0
 
-    def update_k(self, k):
-        self.k = k
+    def toss(self):
+        if self.k == 0:
+            return 1
 
-    def new(self):
-        self._count = (self._count + 1) % self.k
-        return self._count == 0
+        self._index += 1
+        self._g_index = (self._index - 1) // self.k
+        
+        if (self._g_index + 1) % self._mod == 0:
+            return 1
+        
+        is_last_el = (self._index % self.k) == 0
+        if is_last_el:
+            return 0
+        
+        return random.choice([0,1])
 
 
 def build_sequence(self: Scene, n_els=SEQ_LEN):
@@ -96,7 +107,7 @@ def build_sequence(self: Scene, n_els=SEQ_LEN):
         VGroup(*seq_els_groups)
         .arrange(buff=SEQ_ELS_SPACING)
         .align_to(self.camera.frame_center, LEFT)
-        .shift(1.75*UP)
+        .shift(1.85*UP + ORIGIN)
         .shift(RIGHT * (SEQ_ELS_WIDTH + SEQ_ELS_SPACING))
     )
 
@@ -190,8 +201,8 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
     ith_round = 0
 
     # random events generators
-    pgen = RegularRandomGen(k=2**ith_round)
-    coin_pgen = RegularRandomGen(k=2)
+    k_coin_tosser = RegularCoinSequenceTosser(k=ith_round)
+    one_coin_pgen = RegularCoinSequenceTosser(k=1)
 
     ## TITLE
     title = (
@@ -200,12 +211,6 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
     )
     title.set_z_index(RECAP_Z_INDEX)
     self.add(title)
-
-    ## DRAW THE SEQUENCE ####################################################### DRAW THE SEQUENCE
-    seq_group, selection_square = build_sequence(self, n_els=n_els)
-    seq_group.set_z_index(SEQ_Z_INDEX)
-
-    self.add(seq_group, selection_square)
 
     ## DRAW THE MEMORY ######################################################### DRAW THE MEMORY
     mem_list: List[Optional[str]] = [None for _ in range(MEMORY_SIZE)]
@@ -242,7 +247,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
     mem_group = (
         VGroup(*mem_els_groups)
         .arrange(buff=0.01)
-        .move_to(ORIGIN + DOWN * 1)
+        .move_to(ORIGIN + DOWN * 1.5)
         .to_edge(RIGHT, buff=1.25)
     )
     chi_text = (
@@ -256,9 +261,51 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
     )
     mem_group.add(chi_text, pchi_text)
 
+    _hidden_pruning_coin = (
+        MEM_COIN_TEMPLATE.copy()
+        .next_to(mem_els_groups[-1], DOWN, buff=.3)
+    )
+    mem_group.add(_hidden_pruning_coin.copy().set_opacity(0))
+
+    mem_surr_rect = SurroundingRectangle(
+        mem_group,
+        color=GREY,
+        buff=MED_SMALL_BUFF
+    ).set_stroke(width=1, opacity=.7)
+
+    mem_title = (
+        Tex('Memory', font_size=25)
+        .next_to(mem_surr_rect, UP, aligned_edge=UL)
+    )
+
     self.add(
         mem_group, 
+        mem_surr_rect,
+        mem_title,
     )
+
+    ## DRAW THE SEQUENCE ####################################################### DRAW THE SEQUENCE
+    seq_group, selection_square = build_sequence(self, n_els=n_els)
+    seq_group.set_z_index(SEQ_Z_INDEX)
+
+    _size = 3.5
+    _seq_surr_rect_g = Group(
+        selection_square.copy().shift(LEFT * (SEQ_ELS_SPACING + SEQ_ELS_WIDTH) * .6).set_opacity(0),
+        selection_square.copy().shift(RIGHT * (SEQ_ELS_SPACING + SEQ_ELS_WIDTH) * 6.35).set_opacity(0),
+        seq_group[0][-1].copy().set_opacity(0),
+        SEQ_COIN_TEMPLATE.copy().next_to(selection_square, DOWN).set_opacity(0),
+    )
+    seq_surr_rect = SurroundingRectangle(
+        _seq_surr_rect_g,
+        color=GREY,
+        buff=MED_SMALL_BUFF
+    ).set_stroke(width=1, opacity=.7)
+    seq_title = (
+        Tex('Stream', font_size=25)
+        .next_to(seq_surr_rect, UP, aligned_edge=UL)
+    )
+
+    self.add(seq_group, selection_square, seq_surr_rect, seq_title)
 
     ## DRAW THE TRACKERS ####################################################### DRAW TRACKERS
     recap_els = build_recap_els(
@@ -308,16 +355,16 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
         for el in g:
             el.to_edge(LEFT)
 
-    recap_g1_background = SurroundingRectangle(
+    recap_g_background = SurroundingRectangle(
         recap_g, 
         color=BLACK, fill_color=BLACK, fill_opacity=1,
         buff=LARGE_BUFF
     )
-    recap_g1_background.set_z_index(1)
+    recap_g_background.set_z_index(1)
 
     self.add(
         recap_g, 
-        recap_g1_background,
+        recap_g_background,
     )
 
     if only_setup:
@@ -332,7 +379,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
         self.play( 
             seq_group.animate.shift(LEFT * (SEQ_ELS_WIDTH + SEQ_ELS_SPACING)),
 
-            run_time=run_time_fast * .5
+            run_time=run_time_fast
         )
 
         _seq_el_box, seq_el_letter, _seq_el_index = seq_el_group
@@ -380,7 +427,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             letter_coin = SEQ_COIN_TEMPLATE.copy()
 
             # animate the coin spin
-            _is_head = random.random() < .5
+            _is_head = k_coin_tosser.toss()
 
             letter_coin_g = VGroup(letter_coin)
             sampling_coins_group = (
@@ -392,7 +439,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             sampling_coins_group.next_to(selection_square, DOWN)
 
             # remove the previous sampling animation
-            self.play(FadeOut(pre_sampling_coins_group), run_time=.05)
+            self.play(FadeOut(pre_sampling_coins_group), run_time=.031)
             self.remove(pre_sampling_coins_group)
             
             # add the new sampling group
@@ -409,18 +456,20 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             )
 
             # play the animation
-            self.play(AnimationGroup(
-                Rotate(letter_coin, angle=PI * 15, axis=RIGHT),
+            self.play(
                 AnimationGroup(
-                    letter_coin.animate.set_color(GREEN if _is_head else RED),
-                    FadeIn(letter_coin_text),
+                    Rotate(letter_coin, angle=PI * 15, axis=RIGHT),
+                    AnimationGroup(
+                        letter_coin.animate.set_color(GREEN if _is_head else RED),
+                        FadeIn(letter_coin_text),
 
-                    lag_ratio=0
-                ),
+                        lag_ratio=0
+                    ),
 
-                run_time=1,
-                lag_ratio=1
-            ))
+                    run_time=run_time_fast,
+                    lag_ratio=1
+                )
+            )
 
             # remember to add the coin letter to the group,
             # so that it can move
@@ -440,7 +489,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             self.play(
                 FadeOut(sampling_coins_group), 
                 FadeOut(pre_sampling_coins_group),
-                run_time=0.035
+                run_time=0.031
             )
             self.remove(sampling_coins_group)
             self.remove(pre_sampling_coins_group)
@@ -504,7 +553,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             self.play(
                 FadeOut(pre_sampling_coins_group), 
                 FadeOut(sampling_coins_group),
-                run_time=0.035
+                run_time=0.031
             )
             self.remove(pre_sampling_coins_group)
             self.remove(sampling_coins_group)
@@ -526,7 +575,11 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
             )
 
             current_chi_over_p = recap_chi_over_p.copy()
-            self.play(recap_chi_over_p.animate.set_color(GREY))
+            self.play(
+                recap_chi_over_p.animate.set_color(GREY),
+                
+                run_time=run_time_fast
+            )
 
             mem_pruning_coin_text = None
             for ith_ml, ml in enumerate(mem_list[::-1], 1):
@@ -538,7 +591,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
                     mem_pruning_coin.next_to(mem_els_groups[-ith_ml], DOWN, buff=.3)
                     mem_pruning_coin.set_color(COIN_COLOR)
 
-                _is_head = coin_pgen.new()
+                _is_head = one_coin_pgen.toss()
 
                 mem_pruning_coin_text = (
                     MathTex('H' if _is_head else 'T')
@@ -557,7 +610,7 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
                         lag_ratio=0
                     ),
 
-                    run_time=run_time,
+                    run_time=run_time_fast,
                     lag_ratio=1
                 ))
                 
@@ -636,16 +689,18 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
                     )
 
             # remove the memory coin after the memory is pruned
-            self.wait(run_time_fast / 2)
             self.remove(mem_pruning_coin, mem_pruning_coin_text)
 
             # recolor chi over p
-            self.play(recap_chi_over_p.animate.match_style(current_chi_over_p))
+            self.play(
+                recap_chi_over_p.animate.match_style(current_chi_over_p),
+                run_time=run_time_fast
+            )
 
         # update the round number, the probability and the texts
         ith_round += 1
         p = p / 2
-        pgen.update_k(k=2**ith_round)
+        k_coin_tosser = RegularCoinSequenceTosser(k=ith_round)
         
         new_recap_ith_round = (
             get_ith_round_formula(ith_round)
@@ -680,9 +735,8 @@ def cvm_algorithm(self: Scene, only_setup=False, n_els=15, first_els=10, seed=0)
         recap_p = new_recap_p
         recap_chi_over_p = new_recap_chi_over_p
 
-        run_time *= .75
-        run_time_fast = run_time * .5
+        run_time = max(run_time * .75, 0.035)
+        run_time_fast = max(run_time * .5, 0.035)
         
-
     self.wait()
     
