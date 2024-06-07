@@ -1,5 +1,6 @@
 media/*
 .notebooks/media/*
+.devcontainer/*
 *.png
 *.svg
 *.mp4
