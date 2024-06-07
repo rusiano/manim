@@ -1,7 +1,10 @@
 media/*
-.notebooks/media/*
-.devcontainer/*
+.notebooks/media
+*devcontainer.json
+.notebooks/_*
 *.png
 *.svg
 *.mp4
 *.tex
+*.env
+*.pyc
